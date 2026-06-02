@@ -2,7 +2,7 @@
 
 `balloc` (Block Allocator)은 `mmap` 기반의 off-heap 메모리 할당자입니다.
 
-Go GC가 완전히 모르는 영역에서 동작하며, `MakeSlice[T]`를 통해 제네릭 슬라이스를 off-heap에 생성할 수 있습니다.
+GC 마킹 스캔 대상에서 제외되는 오프힙(off-heap) 영역에서 동작하며, `MakeSlice[T]`를 통해 제네릭 슬라이스를 off-heap에 생성할 수 있습니다.
 
 ---
 
@@ -146,7 +146,7 @@ func main() {
 
 | 특성 | 설명 |
 |:---|:---|
-| **Off-heap** | `mmap` 영역 → GC marking 제외 |
+| **Off-heap** | `mmap` 영역 → GC 마킹 제외 |
 | **제네릭 지원** | `unsafe.Slice`로 `[]T` 변환 가능 |
 | **OS 반납** | `Close()` 시 즉시 `munmap` |
 | **NUMA-aware** | `threadID`/`chunkID` 기반 bucketing |

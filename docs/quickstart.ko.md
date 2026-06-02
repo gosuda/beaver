@@ -69,19 +69,19 @@ func main() {
 ### 왜 `HybridFactory`인가?
 
 ```go
-// 낮에서는 이렇게 분기했어야 했음
+// 기존에는 이렇게 분기해야 했습니다
 if size <= 4096 {
     pureArena.Alloc(size)   // 빠름
 } else {
     balloc.Alloc(size)      // off-heap
 }
 
-// HybridFactory는 이걸 낶에서 자동으로 처리
+// HybridFactory는 이를 내부에서 자동으로 처리
 pool := alloc.NewPool(alloc.HybridFactory(64 << 20))
 ```
 
 - `≤ 4KB` → `make([]byte)` 슬래브 (lock-free, **ns 단위**)
-- `> 4KB` → `mmap` 슈퍼블록 (GC 무관, **즉시 OS 반납 가능**)
+- `> 4KB` → `mmap` 슈퍼블록 (GC 마킹 대상 제외, **즉시 OS 반납 가능**)
 
 ---
 
@@ -128,7 +128,7 @@ json.NewDecoder(r.Body).Decode(&req)
 data, err := alloc.MarshalJSON(ctx, response)
 ```
 
-`MarshalJSON`은 낶에서 `json.Encoder` + `Buffer`를 사용하여 출력 버퍼를 off-heap/slab에서 생성합니다. 대형 응답에서 **B/op를 30~50% 절감**합니다.
+`MarshalJSON`은 내부에서 `json.Encoder` + `Buffer`를 사용하여 출력 버퍼를 off-heap/slab에서 생성합니다. 대형 응답에서 **B/op를 30~50% 절감**합니다.
 
 ---
 
@@ -142,7 +142,7 @@ handler := alloc.Middleware(pool)(mux)
 //   3. 요청 종료 시 pool.Put(a) → Reset() → 재사용
 ```
 
-**주의**: 아레나 낶에서 생성된 포인터가 handler를 벗어나면 **dangling pointer**가 됩니다. 글로벌 변수나 백그라운드 goroutine으로 절대 유출시키지 마세요.
+**주의**: 아레나 내부에서 생성된 포인터가 handler를 벗어나면 **dangling pointer**가 됩니다. 글로벌 변수나 백그라운드 goroutine으로 절대 유출시키지 마세요.
 
 ---
 

@@ -45,7 +45,7 @@ func HybridFactory(largeSize uintptr) func() (Allocator, error)
 **자동 분기** hybrid allocator를 생성하는 팩토리.
 
 - `≤ 4KB`: pure Go slab (lock-free, ns 단위)
-- `> 4KB`: mmap off-heap (GC 무관)
+- `> 4KB`: mmap off-heap (GC 마킹 대상 제외)
 
 ```go
 pool := alloc.NewPool(alloc.HybridFactory(64 << 20))
@@ -151,7 +151,7 @@ func (p *Pool) Put(a Allocator)
 func MakeSlice[T any](ctx context.Context, len, cap int) ([]T, error)
 ```
 
-context의 allocator에서 `[]T`를 할당합니다. allocator가 없으면 `make([]T, len, cap)`으로 폰백.
+context의 allocator에서 `[]T`를 할당합니다. allocator가 없으면 `make([]T, len, cap)`으로 폴백.
 
 ```go
 rows, err := alloc.MakeSlice[Row](ctx, 10000, 10000)

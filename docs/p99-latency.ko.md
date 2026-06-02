@@ -4,9 +4,9 @@
 
 ---
 
-## 왜 GC가 p99를 망치는가?
+## 가비지 컬렉션(GC)이 p99 지연 시간에 미치는 영향
 
-Go의 GC는 **mark-and-sweep** 방식입니다. 마킹 단계에서 runtime은 전체 힙의 객체 그래프를 탐색하며, 이 과정에서 **goroutine 실행이 간접적으로 지연**됩니다.
+Go의 GC는 **mark-and-sweep** 방식입니다. 마킹 단계에서 런타임은 전체 힙의 객체 그래프를 탐색하며, 이 과정에서 **고루틴 실행 지연**이 발생할 수 있습니다.
 
 ```
 요청 처리 시간 분포 (일반적인 Go 서버)
@@ -30,11 +30,11 @@ Go의 GC는 **mark-and-sweep** 방식입니다. 마킹 단계에서 runtime은 �
 
 ## Beaver의 해결책: Off-Heap + Slab Reuse
 
-### 1. Off-Heap (mmap) → GC 스캔 대상 제외
+### 1. 오프힙(off-heap, mmap) → GC 마킹 스캔 대상에서 제외
 
 `balloc`과 `Hybrid`의 large path는 `mmap`으로 메모리를 할당합니다. 이 메모리는 Go runtime의 힙 밖에 있으므로:
 
-- **Mark 단계**: 탐색 대상에서 완전히 제외
+- **마킹 단계**: 탐색 대상에서 제외
 - **Sweep 단계**: 관여 없음
 - **Scavenger**: OS에 직접 반납 (`munmap`)
 
@@ -44,7 +44,7 @@ Go의 GC는 **mark-and-sweep** 방식입니다. 마킹 단계에서 runtime은 �
   ├── 객체 B
   └── ...
 
-[mmap 영역] ← GC가 모름
+[mmap 영역] ← GC 마킹 스캔 제외
   ├── []Row 10,000개 (Beaver 할당)
   └── []byte 1MiB (Beaver 할당)
 ```
@@ -55,7 +55,7 @@ Go의 GC는 **mark-and-sweep** 방식입니다. 마킹 단계에서 runtime은 �
 
 - 요청 1: `pool.Get()` → slab 사용 → `Reset()` → `pool.Put()`
 - 요청 2: `pool.Get()` → **이미 준비된 slab** → `Reset()` → `pool.Put()`
-- 결과: `make([]byte)` 호출 횟수가 1/N으로 감소 → GC pressure 감소
+- 결과: `make([]byte)` 호출 횟수가 1/N으로 감소 → 가비지 컬렉션(GC) 부하 경감
 
 ---
 
@@ -77,7 +77,7 @@ p99  = 3.125µs
 p999 = 23.725µs
 ```
 
-GC를 강제로 트리거필 때도 **p99가 3µs 이하**를 유지. 이는 `atomic.AddInt64` 수준의 지연입니다.
+GC를 강제로 트리거할 때도 **p99가 3µs 이하**를 유지. 이는 `atomic.AddInt64` 수준의 지연입니다.
 
 ### Beaver Hybrid — 16 Goroutine 동시 접속
 
@@ -87,7 +87,7 @@ p99  = 7.795µs
 p999 = 237.766µs
 ```
 
-16개 goroutine이 동시에 `Alloc`을 호출필 때도 **p99가 8µs 수준**. 극단적인 contention 상황에서도 수백 µs를 넘지 않음.
+16개 goroutine이 동시에 `Alloc`을 호출할 때도 **p99가 8µs 수준**. 극단적인 contention 상황에서도 수백 µs를 넘지 않음.
 
 ### 비교: Go Heap 기반 할당
 
@@ -121,7 +121,7 @@ Go Heap은 GC가 트리거된 순간 **수백 µs~수 ms**까지 튀는 반면, 
 ```
 32KB × 10,000 = 320MB/s 할당
 → Hybrid의 large path (mmap) 사용
-→ mmap 영역은 GC가 스캔하지 않음
+→ mmap 영역은 GC 마킹 스캔 대상에서 제외
 → 힙 크기는 거의 증가하지 않음
 → GC 트리거 빈도 급감
 → p99: 10µs 이하 (평탄한 곡선)
@@ -141,7 +141,7 @@ Go Heap은 GC가 트리거된 순간 **수백 µs~수 ms**까지 튀는 반면, 
  └────────────────────────────────────→ 지연 시간
    1µs   10µs   100µs  1µs   10µs
 
-Go Heap: 평균은 빠르지만 꼬리가 길게 늘어짐 (GC spike)
+Go Heap: 평균은 빠르지만 지연 시간이 일시적으로 증가(GC 지연)
 Hybrid:  전체 분포가 좁게 모여 있음 (flat curve)
 ```
 
@@ -151,9 +151,9 @@ Hybrid:  전체 분포가 좁게 모여 있음 (flat curve)
 
 | 지표 | Go Heap | **Beaver Hybrid** | 개선율 |
 |:---|:---|:---|---:|
-| p99 (GC pressure) | 200µs ~ 2ms | **3µs** | **99% 감소** |
-| p99.9 (GC pressure) | 2ms ~ 10ms | **24µs** | **99% 감소** |
+| p99 (GC 부하) | 200µs ~ 2ms | **3µs** | **99% 감소** |
+| p99.9 (GC 부하) | 2ms ~ 10ms | **24µs** | **99% 감소** |
 | 처리량 한계 | 힙 크기에 비례 | **메모리 용량까지** | — |
 | RSS 제어 | scavenger 의존 | **munmap 즉시 반납** | — |
 
-Beaver는 **평균 처리량**뿐만 아니라 **꼬리 지연 시간**까지 동시에 개선하는 유일한 Pure Go 솔루션입니다.
+Beaver는 **평균 처리량**뿐만 아니라 **꼬리 지연 시간**까지 동시에 개선할 수 있는 Pure Go 솔루션입니다.

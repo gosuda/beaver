@@ -35,10 +35,10 @@ Beaver는 4개의 계층으로 구성된 메모리 할당자 스위트입니다.
 - `Reset()` 시 offset만 0으로 되돌림
 - `sync.Pool`로 슬래브 재사용
 
-### 낶부 동작
+### 내부 동작
 
 ```go
-// 슬래브 낶에서의 할당은 단순히 atomic add
+// 슬래브 내부에서의 할당은 단순히 atomic add
 next := a.off.Add(int64(size))
 curr := next - int64(size)
 return a.buf[curr:next:next], nil
@@ -58,14 +58,14 @@ return a.buf[curr:next:next], nil
 ## 2. `balloc` — Mmap Off-Heap Block Allocator
 
 ### 설계 목표
-**GC가 완전히 모르는 메모리 영역에서 제네릭 타입 할당**
+**GC 마킹 스캔 대상에서 제외되는 메모리 영역에서 제네릭 타입 할당**
 
 - `syscall.Mmap`으로 OS로부터 직접 메모리 획득
 - `unsafe.Slice`로 `uintptr` → `[]T` 변환
 - `memTree` (lock-free BST)로 메타데이터 관리
 - `OwnerMask` 기반 reference counting으로 공유/해제 지원
 
-### 낶부 동작
+### 내부 동작
 
 ```
 syscall.Mmap(-1, 0, 64MiB, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE)
@@ -73,7 +73,7 @@ syscall.Mmap(-1, 0, 64MiB, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE)
   └── payload 영역 (실제 데이터)
 ```
 
-- **진정한 off-heap**: GC marking 단계에서 완전히 제외
+- **오프힙(off-heap)**: GC 마킹 단계에서 제외
 - **즉시 OS 반납**: `Close()` → `syscall.Munmap`
 - **제네릭 지원**: `MakeSlice[T]`로 `[]Row`, `[]int64` 등 어떤 타입이든 off-heap에 생성
 
@@ -94,14 +94,14 @@ syscall.Mmap(-1, 0, 64MiB, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE)
 
 ### Hybrid Allocator
 
-`NewHybrid`는 `pure`와 `balloc`을 낶에서 결합합니다:
+`NewHybrid`는 `pure`와 `balloc`을 내부에서 결합합니다:
 
 ```
 Alloc(size):
   if size <= 4KB:
     pureArena.alloc(size)      // ns 단위, zero syscall
   else:
-    balloc.Alloc(size)         // mmap, GC-immune
+    balloc.Alloc(size)         // mmap, GC 마킹 스캔 제외
 ```
 
 - **자동 분기**: 호출자가 `Hybrid`인지 의식할 필요 없음
@@ -115,7 +115,7 @@ ctx := alloc.WithAllocator(r.Context(), allocator)
 ```
 
 - `net/http` Middleware와 연동하여 요청 수명 주기에 allocator를 바인딩
-- `FromContext(ctx)`로 핸들러 낶 어디서든 추출
+- `FromContext(ctx)`로 핸들러 내부 어디서든 추출
 
 ### HTTP Middleware
 
@@ -152,7 +152,7 @@ handler := alloc.Middleware(pool)(mux)
 | 특성 | `pure` | `balloc` | `alloc (Hybrid)` | `arena` |
 |:---|:---|:---|:---|:---|
 | **구현** | `make([]byte)` | `mmap` | 둘의 결합 | `make([]byte)` + `Pinner` |
-| **GC 스캔** | slab 자체 대상 | **완전 무시** | small: slab, large: 무시 | GC-friendly |
+| **GC 스캔** | slab 자체 대상 | **마킹 대상 제외** | small: slab, large: 마킹 대상 제외 | GC-friendly |
 | **제네릭** | `[]byte`만 | `[]T` 가능 | `[]T` 가능 | `uintptr` 기반 |
 | **공유** | 불가 | `OwnerMask` | `OwnerMask` (large만) | `OwnerMask` |
 | **OS 반납** | 불가 (scavenger) | 즉시 `munmap` | 즉시 `munmap` (large) | 즉시 |

@@ -16,7 +16,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
     var req Request
     json.NewDecoder(r.Body).Decode(&req)
 
-    // 매 요청마다 힙 할당 → GC pressure
+    // 매 요청마다 힙 할당 → 가비지 컬렉션(GC) 부하 증가
     result := make([]Item, req.Limit)
     for i := range result {
         result[i] = process(i)
@@ -26,7 +26,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-**문제**: `req.Limit`이 10,000이면 매 요청마다 `[]Item` 10,000개가 힙에 할당됨. RPS가 높을수록 GC가 발작.
+**문제**: `req.Limit`이 10,000이면 매 요청마다 `[]Item` 10,000개가 힙에 할당됨. RPS가 높을수록 가비지 컬렉션(GC) 빈도가 증가하고 부하가 가중됩니다.
 
 ### 적용 후 (Beaver Hybrid)
 
@@ -50,7 +50,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-**효과**: `[]Item`이 mmap 영역에 생성되어 GC가 완전히 무시. p99 지연 시간이 평탄해짐.
+**효과**: `[]Item`이 mmap 영역에 생성되어 가비지 컬렉션(GC) 마킹 스캔 대상에서 제외됩니다. p99 지연 시간이 안정화됩니다.
 
 ---
 
@@ -93,7 +93,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-**효과**: `0 B/op`에 가까운 할당. 5만 개 구조체가 GC 스캔 대상에서 제외되어 **p99가 수백 µs에서 수 µs로 감소**.
+**효과**: `0 B/op`에 가까운 할당. 5만 개의 구조체가 GC 마킹 스캔 대상에서 제외되어 p99 지연 시간이 안정화됩니다.
 
 ---
 
@@ -179,14 +179,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 `globalCache`는 요청 종료 후 **dangling pointer**가 됩니다.
 
-### ✅ 올바른 예: 아레나 낶에서만 사용
+### ✅ 올바른 예: 아레나 내부에서만 사용
 
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
     items, _ := alloc.MakeSlice[Item](ctx, 100, 100)
 
-    // 모든 처리를 handler 낶에서 완료
+    // 모든 처리를 handler 내부에서 완료
     process(items)
     respond(w, items)
 

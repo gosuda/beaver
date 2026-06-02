@@ -12,7 +12,7 @@
 
 ```go
 type Arena struct {
-    // 낶부 필드는 공개하지 않음
+    // 내부 필드는 공개하지 않음
 }
 ```
 
@@ -26,7 +26,7 @@ type Arena struct {
 func New() *Arena
 ```
 
-새로운 arena를 생성합니다. 낶부적으로 `make([]byte)`를 사용합니다.
+새로운 arena를 생성합니다. 내부적으로 `make([]byte)`를 사용합니다.
 
 ```go
 a := arena.New()

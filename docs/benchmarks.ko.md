@@ -32,7 +32,7 @@
 | **Beaver Hybrid** | **324** | 48 | 1 | `Alloc` → pure slab (≤4KB) |
 | Beaver Balloc | 310 | 48 | 1 | `Alloc` → mmap |
 
-**분석**: `mi`는 C 함수 호출 + `Free` 쌍으로 인해 1KB 할당에 **16µs**가 소모됩니다. Beaver Hybrid는 `atomic.AddInt64` + slice expression으로 **324ns**에 완료. **52배 차이**.
+**분석**: `unsafe-risk/mi`는 C 함수 호출 및 해제 오버헤드로 인해 1KB 할당에 16.8µs가 소모되는 반면, Beaver Hybrid는 `atomic.AddInt64`와 slice 연산을 활용하여 지연 시간을 324ns로 단축했습니다. 두 구현체는 약 52배의 성능 차이를 보입니다.
 
 ### Large: 64KB (Hybrid slow-path / mmap)
 
@@ -43,7 +43,7 @@
 | **Beaver Hybrid** | **44,692** | 48 | 1 | `Alloc` → mmap |
 | Beaver Balloc | 43,375 | 48 | 1 | `Alloc` → mmap |
 
-**분석**: 64KB는 `smallThreshold(4KB)`를 초과하므로 Hybrid도 mmap 경로를 탑니다. Go Heap이 여전히 빠르지만, **B/op 차이(65KB vs 48B)**가 압도적. 대량 요청 시 GC pressure가 완전히 다릅니다.
+**분석**: 64KB는 `smallThreshold(4KB)`를 초과하므로 Hybrid도 mmap 경로를 탑니다. Go Heap이 빠르지만, B/op 측면에서 Go Heap은 65KB의 힙 메모리를 할당하는 반면 Beaver Hybrid는 48B만 할당합니다. 이 설계는 off-heap 영역을 활용하여 가비지 컬렉션(GC) 마킹 스캔 대상을 줄이고 부하를 경감합니다.
 
 ---
 
@@ -58,7 +58,7 @@
 | **Beaver Hybrid / Balloc** | **16.9** | 0 | 0 |
 | **Beaver Pure** | **6.0** | 0 | 0 |
 
-**분석**: `bytes.Buffer`는 매번 4KB 힙 할당. `mi`는 `MAlloc`/`Free`로 0 allocs지만 C 호출 오버헤드로 241ns. Beaver는 낶부 슬래브에서 `copy`만 수행. **Pure 6ns / Hybrid 17ns**.
+**분석**: `bytes.Buffer`는 매번 4KB 힙 할당. `mi`는 `MAlloc`/`Free`로 0 allocs지만 C 호출 오버헤드로 241ns. Beaver는 내부 슬래브에서 `copy`만 수행. **Pure 6ns / Hybrid 17ns**.
 
 ---
 
@@ -74,7 +74,7 @@
 | Beaver Balloc | 22,024 | 368 | 2 | 동일 |
 | **Beaver Pure** | **7,343** | 1,189 | 2 | `make([]byte)` slab 재사용 |
 
-**분석**: `mi`가 Go Heap보다 느린 이유는 **매 요청마다 C 함수를 호출**하기 때문. 장기 실행 시 `mi`는 메모리를 즉시 반납하므로 RSS는 낮지만, 처리량은 떨어집니다.
+**분석**: `unsafe-risk/mi`가 Go Heap보다 상대적으로 많은 시간이 소요되는 이유는 C 함수 호출 오버헤드 때문입니다. 장기 실행 시 `mi`는 메모리를 즉시 반납하므로 RSS는 낮지만, 처리량은 떨어집니다.
 
 Beaver Hybrid는 `pool.Get/Put`으로 allocator를 **재사용**합니다. 초기 풀 웜업 후에는 `Reset()`만으로 즉시 재사용 가능. 장기 실행 시 처리량과 RSS 모두 우수.
 
@@ -107,9 +107,9 @@ JSON unmarshal (4,096개 values) + 결과 슬라이스 생성 + 간단한 연산
 | Beaver Balloc | 406,878 | 128,822 | 30 |
 | Beaver Pure | 416,037 | 215,339 | 31 |
 
-**분석**: `mi`가 가장 빠른 이유는 `json.Unmarshal` 결과를 Go heap에 두고, 결과 버퍼만 `MAlloc`으로 할당하기 때문. Beaver Balloc/Hybrid는 `MakeSlice[int64]`로 결과 버퍼를 off-heap에 생성하지만, `json.Unmarshal` 낶부 할당은 피할 수 없어 총 지연 시간은 비슷.
+**분석**: `mi`가 가장 빠른 이유는 `json.Unmarshal` 결과를 Go heap에 두고, 결과 버퍼만 `MAlloc`으로 할당하기 때문. Beaver Balloc/Hybrid는 `MakeSlice[int64]`로 결과 버퍼를 off-heap에 생성하지만, `json.Unmarshal` 내부 할당은 피할 수 없어 총 지연 시간은 비슷.
 
-**중요**: Pure가 215KB를 할당하는 이유는 `[]int64`를 `make`로 생성해야 하기 때문. Hybrid/Balloc은 이 부분을 off-heap으로 옮겨 **GC pressure를 감소**.
+**중요**: Pure가 215KB를 할당하는 이유는 `[]int64`를 `make`로 생성해야 하기 때문. Hybrid/Balloc은 이 부분을 off-heap으로 옮겨 **가비지 컬렉션(GC) 부하를 경감**.
 
 ---
 
@@ -132,7 +132,7 @@ JSON unmarshal (4,096개 values) + 결과 슬라이스 생성 + 간단한 연산
 | **소형 할당 속도** | 🏆 **Beaver Pure** | `atomic.Add`만으로 1-6ns |
 | **소형+대형 통합** | 🏆 **Beaver Hybrid** | 크기별 자동 최적 경로 |
 | **처리량 (Throughput)** | 🏆 **Beaver Pure/Hybrid** | Pool 재사용 + CGO 제거 |
-| **p99 안정성** | 🏆 **Beaver Hybrid/Balloc** | off-heap으로 GC spike 제거 |
+| **p99 안정성** | 🏆 **Beaver Hybrid/Balloc** | off-heap 영역을 활용하여 가비지 컬렉션(GC) 부하 경감 |
 | **RSS 제어** | 🏆 **Beaver Balloc/Hybrid** | `munmap`으로 즉시 OS 반납 |
 | **제네릭 슬라이스 off-heap** | 🏆 **Beaver Hybrid/Balloc** | `MakeSlice[T]` 지원 |
 | **범용 malloc/free** | 🏆 **`unsafe-risk/mi`** | C mimalloc의 전문적 관리 |

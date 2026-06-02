@@ -2,7 +2,7 @@
 
 `pure`는 **unsafe 없이** Go 표준 라이브러리만으로 구현된 초고속 메모리 슬래브 할당자입니다.
 
-`alloc.Hybrid`의 small path 낶부 엔진이며, 독립적으로도 사용 가능합니다.
+`alloc.Hybrid`의 small path 내부 엔진이며, 독립적으로도 사용 가능합니다.
 
 ---
 
@@ -12,7 +12,7 @@
 
 ```go
 type Arena struct {
-    // 낶부 필드는 공개하지 않음
+    // 내부 필드는 공개하지 않음
 }
 ```
 
@@ -93,7 +93,7 @@ func (a *Arena) Cap() int
 
 ```go
 type Pool struct {
-    // 낶부 필드는 공개하지 않음
+    // 내부 필드는 공개하지 않음
 }
 ```
 
@@ -135,7 +135,7 @@ func (p *Pool) Put(a *Arena)
 
 ```go
 type Buffer struct {
-    // 낶부 필드는 공개하지 않음
+    // 내부 필드는 공개하지 않음
 }
 ```
 

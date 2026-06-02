@@ -18,7 +18,7 @@ Beaver는 Go의 기본 할당자(`make`/`new`)와 CGO 기반 C 할당자 사이�
 | **소형 할당** | 빠름 (스택/힙) | C 함수 호출 오버헤드 | **슬래브 bump allocator (atomic)** |
 | **대형 할당** | GC pressure ↑ | Off-heap | **mmap off-heap** |
 | **제네릭 슬라이스** | GC 스캔 대상 | 가능 (`unsafe`) | **가능 (`unsafe` + mmap)** |
-| **p99 지연 시간** | GC spike 발생 | 안정적 | **GC 완전 무시 + 3µs 수준** |
+| **p99 지연 시간** | GC spike 발생 | 안정적 | **GC 영향 배제 + 3µs 수준** |
 | **의존성** | 없음 | C 컴파일러 + mimalloc | **Go 표준 라이브러리만** |
 
 ### 핵심 설계 철학
@@ -107,7 +107,7 @@ func main() {
 | 단일 goroutine + 강제 GC | 측정 불가 (C heap은 Go GC와 무관) | **p99 ≈ 3µs** |
 | 16 goroutine 동시 접속 + 강제 GC | 측정 불가 | **p99 ≈ 7–22µs** |
 
-`mi`는 C heap을 사용하므로 Go GC와 완전히 격리되어 있지만, **C 함수 호출 자체의 고정 지연**이 존재합니다. Beaver Hybrid는 소형 할당을 Go runtime 낮에서 처리하므로 syscall/C 호출 없이 **ns 단위**로 완료됩니다.
+`mi`는 C heap을 사용하므로 Go GC와 완전히 격리되어 있지만, **C 함수 호출 자체의 고정 지연**이 존재합니다. Beaver Hybrid는 소형 할당을 Go runtime 내부에서 처리하므로 syscall/C 호출 없이 **ns 단위**로 완료됩니다.
 
 전체 벤치마크 결과는 [`docs/benchmarks.md`](docs/benchmarks.md)를 참고하세요.
 
