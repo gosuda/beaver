@@ -91,7 +91,7 @@ Beaver Hybrid는 `pool.Get/Put`으로 allocator를 **재사용**합니다. 초�
 | **Beaver Hybrid** | **16,931** | 8,494 | 5 |
 | Beaver Balloc | 17,918 | 8,379 | 5 |
 
-**분석**: JSON 직렬화 자체가 `encoding/json` 낶부 할당이 병목이므로 할당자 간 차이가 미미. 다만 Beaver의 `Buffer`가 off-heap/slab에서 동작하므로 **output buffer 할당**은 제로.
+**분석**: JSON 직렬화 자체가 `encoding/json` 내부 할당이 병목이므로 할당자 간 차이가 미미. 다만 Beaver의 `Buffer`가 off-heap/slab에서 동작하므로 **output buffer 할당**은 제로.
 
 ---
 
