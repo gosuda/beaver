@@ -4,8 +4,8 @@ import (
 	"sync"
 	"unsafe"
 
-	"beaver/arena"
-	"beaver/balloc"
+	"github.com/gosuda/beaver/arena"
+	"github.com/gosuda/beaver/balloc"
 )
 
 const (

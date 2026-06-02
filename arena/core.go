@@ -12,7 +12,7 @@ var (
 	ErrNotFound    = errors.New("arena: allocation not found")
 )
 
-type bArena struct {
+type Arena struct {
 	scale int
 	topo  *topology
 	tree  memTree
@@ -27,17 +27,17 @@ type arenaBlock struct {
 	pin  runtime.Pinner
 }
 
-func New() *bArena {
-	a := &bArena{
+func New() *Arena {
+	a := &Arena{
 		scale:  ArenaScale,
 		topo:   newTopology(ArenaScale, GFPoly),
 		blocks: make(map[uintptr]*arenaBlock),
 	}
-	runtime.SetFinalizer(a, (*bArena).Close)
+	runtime.SetFinalizer(a, (*Arena).Close)
 	return a
 }
 
-func (a *bArena) Alloc(size uintptr, ownerMask uint64, threadID, chunkID uint64) (uintptr, int, error) {
+func (a *Arena) Alloc(size uintptr, ownerMask uint64, threadID, chunkID uint64) (uintptr, int, error) {
 	if size == 0 {
 		return 0, 0, ErrInvalidSize
 	}
@@ -59,7 +59,7 @@ func (a *bArena) Alloc(size uintptr, ownerMask uint64, threadID, chunkID uint64)
 	return addr, bucket, nil
 }
 
-func (a *bArena) Share(addr uintptr, ownerMask uint64) error {
+func (a *Arena) Share(addr uintptr, ownerMask uint64) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	block := a.blocks[addr]
@@ -70,7 +70,7 @@ func (a *bArena) Share(addr uintptr, ownerMask uint64) error {
 	return nil
 }
 
-func (a *bArena) FreeVarying(addr uintptr, layerMask uint64) (bool, error) {
+func (a *Arena) FreeVarying(addr uintptr, layerMask uint64) (bool, error) {
 	remaining, found := a.tree.freeVarying(addr, layerMask)
 	if !found {
 		return false, ErrNotFound
@@ -90,7 +90,7 @@ func (a *bArena) FreeVarying(addr uintptr, layerMask uint64) (bool, error) {
 	return true, nil
 }
 
-func (a *bArena) Close() {
+func (a *Arena) Close() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed {
@@ -104,6 +104,6 @@ func (a *bArena) Close() {
 	runtime.SetFinalizer(a, nil)
 }
 
-func (a *bArena) Bucket(threadID, chunkID uint64) int {
+func (a *Arena) Bucket(threadID, chunkID uint64) int {
 	return a.topo.bucket(threadID, chunkID)
 }
