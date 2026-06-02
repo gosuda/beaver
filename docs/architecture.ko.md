@@ -12,13 +12,13 @@ Beaver는 4개의 계층으로 구성된 메모리 할당자 스위트입니다.
 │  ├── small path  (≤ 4KB)  →  pureArena (make([]byte))       │
 │  └── large path (> 4KB)   →  balloc (mmap)                  │
 ├─────────────────────────────────────────────────────────────┤
-│  pure                                                         │
+│  pure                                                       │
 │  └── atomic.Int64 bump allocator on Go heap slab            │
 ├─────────────────────────────────────────────────────────────┤
-│  balloc                                                       │
+│  balloc                                                     │
 │  └── mmap super-block + lock-free memTree + freeList        │
 ├─────────────────────────────────────────────────────────────┤
-│  arena                                                        │
+│  arena                                                      │
 │  └── GC-friendly reference-counted blocks (runtime.Pinner)  │
 └─────────────────────────────────────────────────────────────┘
 ```
