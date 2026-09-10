@@ -1,0 +1,64 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+
+      - name: Vet secure
+        run: go vet ./secure/
+
+      - name: Build all
+        if: runner.os != 'Windows'
+        run: go build ./...
+
+      - name: Test all
+        if: runner.os != 'Windows'
+        run: go test ./... -count=1
+
+      - name: Test secure with race detector
+        if: runner.os != 'Windows'
+        run: go test ./secure/ -race -count=1 -v
+
+      # balloc is Unix-only (syscall.Mmap); the packages below are portable.
+      - name: Build (windows)
+        if: runner.os == 'Windows'
+        run: go build ./secure/ ./pure/ ./arena/ ./alloc/ ./examples/...
+
+      - name: Test (windows)
+        if: runner.os == 'Windows'
+        run: go test ./secure/ ./pure/ ./arena/ ./alloc/ -count=1 -v
+
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          run: |
+            pkg install -y go
+            go version
+            go vet ./secure/
+            go build ./...
+            go test ./... -count=1
+            go test ./secure/ -count=1 -v
