@@ -26,27 +26,16 @@ jobs:
         run: go vet ./secure/
 
       - name: Build all
-        if: runner.os != 'Windows'
         run: go build ./...
 
       - name: Test all
-        if: runner.os != 'Windows'
         run: go test ./... -count=1
 
+      # -race needs cgo (a C toolchain); not reliably available on the
+      # windows-latest runner, so it only runs on Unix.
       - name: Test secure with race detector
         if: runner.os != 'Windows'
         run: go test ./secure/ -race -count=1 -v
-
-      # balloc is Unix-only (syscall.Mmap/Munmap), and alloc (and anything
-      # that imports it, e.g. pure's tests and examples/compute) pulls balloc
-      # in transitively, so only secure and arena build/test on Windows.
-      - name: Build (windows)
-        if: runner.os == 'Windows'
-        run: go build ./secure/ ./arena/
-
-      - name: Test (windows)
-        if: runner.os == 'Windows'
-        run: go test ./secure/ ./arena/ -count=1 -v
 
   freebsd:
     runs-on: ubuntu-latest

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"runtime"
 	"sync/atomic"
-	"syscall"
 	"unsafe"
 )
 
@@ -47,13 +46,7 @@ func New(length uintptr) (*BlockAllocator, error) {
 	if length < uintptr(defaultNodeCapacity)*unsafe.Sizeof(BallocNode{})+4096 {
 		return nil, ErrInvalidSize
 	}
-	mem, err := syscall.Mmap(
-		-1,
-		0,
-		int(length),
-		syscall.PROT_READ|syscall.PROT_WRITE,
-		syscall.MAP_ANON|syscall.MAP_PRIVATE,
-	)
+	mem, err := mmapAnon(int(length))
 	if err != nil {
 		return nil, err
 	}
@@ -159,13 +152,13 @@ func (b *BlockAllocator) Close() {
 	}
 	b.cleanup.Stop()
 	if b.mapping != nil {
-		_ = syscall.Munmap(b.mapping)
+		_ = munmapAnon(b.mapping)
 		b.mapping = nil
 	}
 }
 
 func munmapCleanup(mem []byte) {
-	_ = syscall.Munmap(mem)
+	_ = munmapAnon(mem)
 }
 
 func (b *BlockAllocator) newNode(addr, size uintptr, ownerMask uint64) (*BallocNode, error) {

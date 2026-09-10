@@ -59,15 +59,17 @@ func platformFree(mapping []byte) error {
 	return windows.VirtualFree(uintptr(unsafe.Pointer(&mapping[0])), 0, windows.MEM_RELEASE)
 }
 
+// lockPages locks b against swap via VirtualLock. Core-dump (WER)
+// exclusion is applied best-effort: werapi.dll's
+// WerRegisterExcludedMemoryBlock is absent on some Windows editions/CI
+// images, and losing that secondary protection must not fail the swap
+// lock, which is the protection WithLock's callers actually depend on.
 func lockPages(b []byte) error {
 	addr := uintptr(unsafe.Pointer(&b[0]))
 	if err := windows.VirtualLock(addr, uintptr(len(b))); err != nil {
 		return err
 	}
-	if err := werExclude(addr, uintptr(len(b))); err != nil {
-		_ = windows.VirtualUnlock(addr, uintptr(len(b)))
-		return err
-	}
+	_ = werExclude(addr, uintptr(len(b)))
 	return nil
 }
 
