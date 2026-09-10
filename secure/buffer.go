@@ -31,6 +31,12 @@ type config struct {
 
 type Option func(*config)
 
+// lockPagesFn is the page-locking implementation used by NewBuffer.
+// It is a variable (rather than a direct call to lockPages) so tests can
+// override it to simulate platform lock failure without depending on
+// OS/CI-specific behavior (e.g. RLIMIT_MEMLOCK, VirtualLock quirks).
+var lockPagesFn = lockPages
+
 // WithLock locks the buffer pages in RAM (mlock / VirtualLock) and excludes
 // them from core dumps (MADV_DONTDUMP / WerRegisterExcludedMemoryBlock).
 // Allocation fails if the lock cannot be established, e.g. when exceeding
@@ -95,9 +101,9 @@ func NewBuffer(size int, opts ...Option) (*Buffer, error) {
 	}
 	b := &Buffer{data: data, mapping: mapping, cfg: cfg}
 	if cfg.lock {
-		if err := lockPages(data); err != nil {
-			_ = platformFree(data)
+		if err := lockPagesFn(data); err != nil {
 			if !cfg.bestEffort {
+				_ = platformFree(mapping)
 				return nil, err
 			}
 		} else {
