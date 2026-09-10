@@ -47,7 +47,11 @@ func runAttackChild(mode string) {
 		os.Exit(0)
 	case "guard-overrun":
 		// Write one byte past the buffer into the trailing guard page.
-		b, err := NewBuffer(4096, WithGuardPages())
+		// The buffer must be exactly one OS page: a smaller size would
+		// leave writable slack from rounding the guarded region up to a
+		// page boundary (seen on arm64 macOS, 16 KiB pages) between the
+		// buffer end and the guard page.
+		b, err := NewBuffer(os.Getpagesize(), WithGuardPages())
 		if err != nil {
 			fmt.Println("child: alloc:", err)
 			os.Exit(10)
@@ -59,7 +63,7 @@ func runAttackChild(mode string) {
 		os.Exit(0)
 	case "guard-underrun":
 		// Write one byte before the buffer into the leading guard page.
-		b, err := NewBuffer(4096, WithGuardPages())
+		b, err := NewBuffer(os.Getpagesize(), WithGuardPages())
 		if err != nil {
 			fmt.Println("child: alloc:", err)
 			os.Exit(10)

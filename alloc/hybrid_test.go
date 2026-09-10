@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"runtime"
 	"sort"
 	"sync"
@@ -132,6 +133,9 @@ func TestHybridP99Latency(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping p99 latency test in short mode")
 	}
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping p99 latency test on CI: shared/virtualized runners are too noisy for a microsecond-scale wall-clock budget")
+	}
 
 	h, err := NewHybrid(128 << 20)
 	if err != nil {
@@ -180,6 +184,9 @@ func TestHybridP99LatencyConcurrent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping concurrent p99 latency test in short mode")
 	}
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping concurrent p99 latency test on CI: shared/virtualized runners are too noisy for a microsecond-scale wall-clock budget")
+	}
 
 	h, err := NewHybrid(256 << 20)
 	if err != nil {
@@ -188,9 +195,9 @@ func TestHybridP99LatencyConcurrent(t *testing.T) {
 	defer h.Close()
 
 	const (
-		workers    = 16
-		perWorker  = 5000
-		triggerGC  = true
+		workers   = 16
+		perWorker = 5000
+		triggerGC = true
 	)
 
 	var wg sync.WaitGroup

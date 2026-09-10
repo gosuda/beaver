@@ -37,14 +37,16 @@ jobs:
         if: runner.os != 'Windows'
         run: go test ./secure/ -race -count=1 -v
 
-      # balloc is Unix-only (syscall.Mmap); the packages below are portable.
+      # balloc is Unix-only (syscall.Mmap/Munmap), and alloc (and anything
+      # that imports it, e.g. pure's tests and examples/compute) pulls balloc
+      # in transitively, so only secure and arena build/test on Windows.
       - name: Build (windows)
         if: runner.os == 'Windows'
-        run: go build ./secure/ ./pure/ ./arena/ ./alloc/ ./examples/...
+        run: go build ./secure/ ./arena/
 
       - name: Test (windows)
         if: runner.os == 'Windows'
-        run: go test ./secure/ ./pure/ ./arena/ ./alloc/ -count=1 -v
+        run: go test ./secure/ ./arena/ -count=1 -v
 
   freebsd:
     runs-on: ubuntu-latest
