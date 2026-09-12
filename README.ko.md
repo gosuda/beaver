@@ -48,6 +48,11 @@ import (
     "github.com/gosuda/beaver/alloc"
 )
 
+type Row struct {
+    ID    int64
+    Value float64
+}
+
 func main() {
     // 1. 가장 빠르고 권장되는 Hybrid allocator 풀 생성
     pool := alloc.NewPool(alloc.HybridFactory(64 << 20)) // 64 MiB
@@ -73,6 +78,32 @@ func main() {
 
 더 상세한 내용은 [`docs/quickstart.md`](docs/quickstart.md)를 참고하세요.
 
+### 민감정보(시크릿) 보관 — `secure`
+
+API 키·토큰·암호화 키처럼 노출되면 안 되는 데이터는 일반 `[]byte` 대신
+`secure` 패키지를 쓰세요. GC 힙 바깥에 할당되고, 스왑 잠금·가드 페이지·
+`Destroy` 시 제로화 + 캐시 플러시까지 지원합니다.
+
+```go
+import "github.com/gosuda/beaver/secure"
+
+buf, err := secure.NewBuffer(4096,
+    secure.WithLock(),       // mlock / VirtualLock, 코어덤프 제외
+    secure.WithGuardPages(), // 버퍼 앞뒤 PROT_NONE 가드 페이지
+    secure.WithZeroize(),    // Destroy 시 메모리 제로화
+    secure.WithFlush(),      // Destroy 시 CPU 캐시에서 제거
+)
+if err != nil {
+    panic(err)
+}
+defer buf.Destroy()
+
+copy(buf.Bytes(), []byte("api-key-goes-here"))
+```
+
+프로세스 전역 하드닝(`HardenProcess()`)을 포함한 전체 API는
+[`docs/api-reference/secure.md`](docs/api-reference/secure.md)를 참고하세요.
+
 ---
 
 ## 패키지 구성
@@ -83,6 +114,7 @@ func main() {
 | [`pure`](docs/api-reference/pure.md) | Pure Go `make([]byte)` 기반 arena | 소형 버퍼 중심, `[]byte`만 필요 |
 | [`balloc`](docs/api-reference/balloc.md) | `mmap` 기반 off-heap block allocator | 대형 메모리, GC 완전 배제 필수 |
 | [`arena`](docs/api-reference/arena.md) | GC-friendly reference-counted arena | 공유 소유권이 필요한 경우 |
+| [`secure`](docs/api-reference/secure.md) | swap-lock/가드페이지/제로화 지원 하드닝 버퍼 | API 키·토큰 등 민감정보 보관 |
 
 ---
 
@@ -122,6 +154,7 @@ func main() {
 - [`docs/webapp-guide.md`](docs/webapp-guide.md) — JSON, DB 쿼리, 배치 엔드포인트 적용 가이드
 - [`docs/api-reference/alloc.md`](docs/api-reference/alloc.md) — alloc API 레퍼런스
 - [`docs/api-reference/pure.md`](docs/api-reference/pure.md) — pure API 레퍼런스
+- [`docs/api-reference/secure.md`](docs/api-reference/secure.md) — secure API 레퍼런스
 
 ---
 

@@ -14,6 +14,7 @@ Inspired by mimalloc's slab and lock-free design, but implemented without C call
 | `pure` | `make([]byte)` bump allocator with atomic offset |
 | `balloc` | `mmap`-based off-heap block allocator |
 | `arena` | GC-friendly reference-counted allocator |
+| `secure` | Hardened buffers for secrets: locked/guarded/zeroized OS memory |
 
 ---
 
@@ -26,6 +27,11 @@ import (
     "net/http"
     "github.com/gosuda/beaver/alloc"
 )
+
+type Row struct {
+    ID    int64
+    Value float64
+}
 
 func main() {
     pool := alloc.NewPool(alloc.HybridFactory(64 << 20))
@@ -45,6 +51,34 @@ func main() {
 `HybridFactory` automatically selects:
 - `<= 4KB`: pure Go slab (`atomic.Int64` bump)
 - `> 4KB`: `mmap` off-heap
+
+---
+
+## Secure Memory
+
+For secrets (API keys, tokens, crypto material), use `secure` instead of a
+plain `[]byte`: it allocates outside the GC heap, can lock pages against
+swap, guard against overruns, and zero + cache-flush on release.
+
+```go
+import "github.com/gosuda/beaver/secure"
+
+buf, err := secure.NewBuffer(4096,
+    secure.WithLock(),       // mlock / VirtualLock, excluded from core dumps
+    secure.WithGuardPages(), // PROT_NONE pages around the buffer
+    secure.WithZeroize(),    // wipe on Destroy
+    secure.WithFlush(),      // evict from CPU cache on Destroy
+)
+if err != nil {
+    panic(err)
+}
+defer buf.Destroy()
+
+copy(buf.Bytes(), []byte("api-key-goes-here"))
+```
+
+See [`docs/api-reference/secure.md`](docs/api-reference/secure.md) for the
+full API, including `HardenProcess()` for process-wide protections.
 
 ---
 
@@ -71,7 +105,7 @@ See `docs/benchmarks.md` for details.
 - `docs/benchmarks.md` — Measurement methodology and results
 - `docs/p99-latency.md` — Tail latency tests
 - `docs/webapp-guide.md` — Integration patterns
-- `docs/api-reference/` — Package API docs
+- `docs/api-reference/` — Package API docs (including `secure.md`)
 
 ---
 
