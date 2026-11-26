@@ -4,16 +4,23 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '19 5 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, depot-macos-latest, windows-latest]
+        os: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["depot-ubuntu-24.04","depot-macos-latest","depot-windows-2025"]' || '["depot-ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,13 +39,14 @@ jobs:
         run: go test ./... -count=1
 
       # -race needs cgo (a C toolchain); not reliably available on the
-      # windows-latest runner, so it only runs on Unix.
+      # depot-windows-2025 runner, so it only runs on Unix.
       - name: Test secure with race detector
         if: runner.os != 'Windows'
         run: go test ./secure/ -race -count=1 -v
 
   freebsd:
-    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
